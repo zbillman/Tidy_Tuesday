@@ -21,6 +21,12 @@ baltimore_bridges <- read_csv("https://raw.githubusercontent.com/rfordatascience
   mutate(county = replace(county, county == "Baltimore city", "Baltimore City"))
 ```
 
+#Just messing around to learn more about the data. Sandbox stuff
+```{r}
+baltimore_bridges %>%
+  count(bridge_condition)
+```
+
 #count by decade
 ##%/% is integer division which just divides by the number after the operator and leaves no remainder
 ##e.g. 22 %/% 10 = 2 & 132 %/% 10 = 13
