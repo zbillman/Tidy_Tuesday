@@ -25,7 +25,7 @@ library(splines)
 library(broom)
 theme_set(theme_light())
 
-maryland_bridges <- read_csv("https://raw.githubusercontent.com/zpbillman/Tidy_Tuesday/master/2018-12-06%20Baltimore%20Bridges/baltimore_bridges%5B1%5D.csv") %>%
+maryland_bridges <- read_csv("https://raw.githubusercontent.com/zpbillman/Tidy_Tuesday/master/Tidy%20Tuesday%20Archives/2018-12-06%20Baltimore%20Bridges/baltimore_bridges%5B1%5D.csv") %>%
   select(-vehicles) %>%
   filter(yr_built >= 1900) %>%
   replace_na(list(responsibility = "Replaced by tidyr")) %>%
