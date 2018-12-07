@@ -309,9 +309,9 @@ augment(respYR_model, maryland_bridges, type.predict = "response") %>%
 #Above plot but with predictive estimates
 ##Notice mutate(reorder()) vs arrange(). Arrange controls dropping points on the paper, but not the order of factors
 ```{r}
-model %>%
+respYRcnty_model %>%
   tidy(conf.int = TRUE) %>%
-  filter(str_detect(term,"responsibility")) %>%
+  filter(str_detect(term,"responsibility|county")) %>%
   mutate(term = reorder(term, estimate)) %>%
   ggplot(aes(y = term, x = estimate)) +
   geom_point() +
