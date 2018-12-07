@@ -2,11 +2,7 @@
 title: "2018-11-27 Baltimore Bridges 2018-12-06"
 author: "zpb"
 date: "December 6, 2018"
-output:
-  github_document: default
-  html_document: default
-knit: (function(inputFile, encoding) {
-  rmarkdown::render(inputFile, encoding = encoding, output_format = "all") })
+output: github_document
 editor_options: 
   chunk_output_type: console
 ---
