@@ -11,12 +11,14 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#clean data
+#clean data & load up some packages
 ```{r}
 set.seed(6942069)
 library(tidyverse)
 library(scales)
 library(forcats)
+library(splines)
+library(broom)
 theme_set(theme_light())
 
 maryland_bridges <- read_csv("https://raw.githubusercontent.com/zpbillman/Tidy_Tuesday/master/2018-12-06%20Baltimore%20Bridges/baltimore_bridges%5B1%5D.csv") %>%
@@ -31,12 +33,7 @@ maryland_bridges <- read_csv("https://raw.githubusercontent.com/zpbillman/Tidy_T
     )
 ```
 
-#Sandbox area of sifting through data
-```{r}
-
-```
-
-#Create histogram of bridges built after 1880
+#histogram of bridges built after 1880
 ```{r}
 maryland_bridges %>%
   count(semidecade = 5 * (yr_built %/% 5)) %>%
@@ -50,8 +47,8 @@ maryland_bridges %>%
 ```
 
 #count by decade
-##%/% is integer division which just divides by the number after the operator and leaves no remainder
-##e.g. 22 %/% 10 = 2 & 132 %/% 10 = 13
+%/% is integer division which just divides by the number after the operator and leaves no remainder
+e.g. 22 %/% 10 = 2 & 132 %/% 10 = 13
 ```{r}
 maryland_bridges %>%
   count(decadeBuilt = 10 * (yr_built %/% 10))
@@ -97,7 +94,7 @@ maryland_bridges %>%
 
 
 #Responsibility of roads
-##Notice to change the NAs to something else we needed to do a list. I don't know why :|
+Notice to change the NAs to something else we needed to do a list. I don't know why :|
 ```{r}
 maryland_bridges %>%
   replace_na(list(responsibility = "Other")) %>%
@@ -131,7 +128,7 @@ maryland_bridges %>%
 ```
 
 #Traffic
-##To get a nice looking 10^.x scales there is a link in R>General>How to use exponents...
+To get a nice looking 10^.x scales there is a link in R>General>How to use exponents...
 ```{r}
 maryland_bridges %>%
   ggplot(aes(avg_daily_traffic)) +
@@ -140,7 +137,7 @@ maryland_bridges %>%
 ```
 
 #Summary of quintiles
-##quintiles determined by quantile(avg_daily_traffic, c(0, .2, .4, .6, .8, 1))
+quintiles determined by quantile(avg_daily_traffic, c(0, .2, .4, .6, .8, 1))
 ```{r}
 maryland_bridges %>%
   filter(yr_built >= 1990) %>%
@@ -152,8 +149,8 @@ maryland_bridges %>%
 ```
 
 #How does traffic affect how well maintained a brdige is?
-##using ntile(value, n) breaks a set of data into its n tiles. Here I use 5 for quintiles
-##Required to set quintile as a character to get ggplot to read them as descrete
+using ntile(value, n) breaks a set of data into its n tiles. Here I use 5 for quintiles
+Required to set quintile as a character to get ggplot to read them as descrete
 ```{r}
 maryland_bridges %>%
   mutate(traffic_quintile = as.character(ntile(avg_daily_traffic, 5))) %>%
@@ -170,7 +167,7 @@ maryland_bridges %>%
 ```
 
 #making a map for the first time ever!
-##The call to arrange() puts the high values later
+The call to arrange() puts the high values later
 ```{r}
 maryland_bridges %>%
   arrange(avg_daily_traffic) %>%
@@ -199,7 +196,7 @@ maryland_bridges %>%
   theme_void()
 ```
 
-#More of a map sandbox here
+#Bridges on map colored by county
 ```{r}
 maryland_bridges %>%
   ggplot(aes(x = long, y = lat, color = county)) +
@@ -210,6 +207,7 @@ maryland_bridges %>%
   theme_void()
 ```
 
+#County responsibility on precentage of bridges rated 'Good' by year
 ```{r}
 maryland_bridges %>%
   group_by(
@@ -231,7 +229,7 @@ maryland_bridges %>%
 
 
 #Effect of county responsibilty and time on bridge condition
-##Need to put data = ., otherwise it would pipe this dataframe right into the start
+Need to put data = ., otherwise it would pipe this dataframe right into the start
 ```{r}
 maryland_bridges %>%
   mutate(good = bridge_condition == "Good") %>%
@@ -240,11 +238,10 @@ maryland_bridges %>%
 ```
 
 #Now to model it
-##augment takes the original data and models it with a new column called fitted
-##A lot of the augment shit you need to tell it the type of prediction to make
-##augment accepts a model object and adds that information to the original dataset
+augment takes the original data and models it with a new column called fitted
+A lot of the augment shit you need to tell it the type of prediction to make
+augment accepts a model object and adds that information to the original dataset
 ```{r}
-library(broom)
 #fit a logistic model
 simple_model <- maryland_bridges %>%
   mutate(good = bridge_condition == "Good") %>% #adds column that shows status of Good as True or False
@@ -256,10 +253,9 @@ augment(simple_model, maryland_bridges, type.predict = "response") %>%
   expand_limits(y = 1)
 ```
 
-#Same type of model, but now with more degrees of freedom
-##Change the 2 to see different types of shapes and better understand DOF
+Same type of model, but now with more degrees of freedom
+Change the 2 to see different types of shapes and better understand DOF
 ```{r}
-library(splines)
 dof_model <- maryland_bridges %>%
   mutate(good = bridge_condition == "Good") %>% #adds column that shows status of Good as True or False
   glm(good ~ ns(yr_built, 4), data = ., family = "binomial")
@@ -270,15 +266,13 @@ augment(dof_model, maryland_bridges, type.predict = "response") %>%
   expand_limits(y = 1)
 ```
 
-#consider a spline fit for this same regression
-##ns(yr_built, 4) gives 4 degrees of freedom
-##+ responsibility allows responsibility to linearly affect it
-##You can then use the color to pull them apart and see how that variable affects the model
-##Year and responsibilty are not allowed to interact with each other in this model
-##Goodness vs year, goodness vs responsibility, goodness vs county all put together
+consider a spline fit for this same regression
+ns(yr_built, 4) gives 4 degrees of freedom
++ responsibility allows responsibility to linearly affect it
+You can then use the color to pull them apart and see how that variable affects the model
+Year and responsibilty are not allowed to interact with each other in this model
+Goodness vs year, goodness vs responsibility, goodness vs county all put together
 ```{r}
-library(splines)
-
 respYRcnty_model <- maryland_bridges %>%
   mutate(good = bridge_condition == "Good") %>%
   glm(good ~ ns(yr_built, 4) + responsibility + county, data = ., family = "binomial")
@@ -293,7 +287,7 @@ augment(respYRcnty_model, maryland_bridges, type.predict = "response") %>%
 
 There are not significant differences between shit though LOL
 
-#Removed influence of county from above plot
+Removed influence of county from above plot
 ```{r}
 respYR_model <- maryland_bridges %>%
   mutate(good = bridge_condition == "Good") %>%
@@ -306,8 +300,8 @@ augment(respYR_model, maryland_bridges, type.predict = "response") %>%
   labs(y = "Predicted probability a bridge built in a given decade will be rated 'Good'")
 ```
 
-#Above plot but with predictive estimates
-##Notice mutate(reorder()) vs arrange(). Arrange controls dropping points on the paper, but not the order of factors
+Above plot but with predictive estimates
+Notice mutate(reorder()) vs arrange(). Arrange controls dropping points on the paper, but not the order of factors
 ```{r}
 respYRcnty_model %>%
   tidy(conf.int = TRUE) %>%
@@ -318,7 +312,7 @@ respYRcnty_model %>%
   geom_errorbarh(aes(xmin = conf.low, xmax = conf.high))
 ```
 
-#In a given year, the odds of a bridge having a rating of good because of who is responsible
+In a given year, the odds of a bridge having a rating of good because of who is responsible
 ```{r}
 respYR_model %>%
   tidy(conf.int = TRUE) %>%
