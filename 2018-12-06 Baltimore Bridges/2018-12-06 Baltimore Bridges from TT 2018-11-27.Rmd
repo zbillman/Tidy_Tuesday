@@ -219,8 +219,7 @@ maryland_bridges %>%
   summarize(
     pct_good = mean(bridge_condition == "Good"),
     total = n()
-    )
-
+    ) %>%
   ggplot(aes(x = decade, y = pct_good, color = county)) +
   geom_line() + 
   scale_y_continuous(labels = percent_format()) +
