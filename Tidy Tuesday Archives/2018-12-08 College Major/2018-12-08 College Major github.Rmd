@@ -3,7 +3,6 @@ title: "2018-12-08 College Major TT 2018-10-16"
 author: "zpb"
 date: "December 8, 2018"
 output: github_document
-always_allow_html: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -152,8 +151,6 @@ g <- majors_processed %>%
   scale_y_continuous(labels = dollar_format()) +
   expand_limits(y = 0)
 
-ggplotly(g)
-
 g
 ```
 
@@ -170,8 +167,6 @@ g <- majors_processed %>%
   scale_color_brewer(palette = "Dark2") +
   scale_y_continuous(labels = dollar_format()) +
   expand_limits(y = 0)
-
-ggplotly(g)
 
 g
 ```
