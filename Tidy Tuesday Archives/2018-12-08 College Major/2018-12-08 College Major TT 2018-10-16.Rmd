@@ -2,7 +2,9 @@
 title: "2018-12-08 College Major TT 2018-10-16"
 author: "zpb"
 date: "December 8, 2018"
-output: html_document
+output: 
+  html_document:
+    keep_md: true
 ---
 
 ```{r setup, include=FALSE}
@@ -154,7 +156,7 @@ g <- majors_processed %>%
 ggplotly(g)
 ```
 
-#Plotly graphic of more common majors
+#Only more common majors
 50th precentile of sample size as cutoff (130+)
 ```{r}
 g <- majors_processed %>%
