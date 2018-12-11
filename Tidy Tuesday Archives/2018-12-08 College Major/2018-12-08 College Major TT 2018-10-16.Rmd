@@ -9,8 +9,368 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
+#Loading Packages & Setting Themes
 ```{r}
+library(tidyverse)
+library(scales)
+library(ggrepel)
+library(broom)
+library(plotly)
 
+theme_set(theme_light())
 ```
 
+#Grab dataset and clean it up
+```{r}
+recent_grads <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2018-10-16/recent-grads.csv")
+
+majors_processed <- recent_grads %>%
+  arrange(desc(Median)) %>%
+  mutate(Major = str_to_title(Major),
+         Major = fct_reorder(Major, Median))
+
+#consider using summarize_at(vars(Total, Men, Women), sum)
+categories_processed <- majors_processed %>%
+  filter(!is.na(Total)) %>% #Food science has an NA here!
+  group_by(Major_category) %>%
+  summarize(Total = sum(Total),
+            Men = sum(Men),
+            Women = sum(Women),
+            ShareWomen = Women/Total,
+            Samples = sum(Sample_size),
+            Median_wtd = sum(Median * Sample_size) / sum(Sample_size),
+            P25th_wtd = sum(P25th * Sample_size) / sum(Sample_size),
+            P75th_wtd = sum(P75th * Sample_size) / sum(Sample_size))
+```
+
+#Looking at sample size of dataset
+Keep in mind the limitations of what we are looking at here
+```{r}
+Hmisc::describe(majors_processed$Sample_size)
+```
+
+#Major category and gender
+```{r}
+categories_processed %>%
+  gather(Gender, Number, Men, Women) %>%
+  mutate(Major_category = fct_reorder(Major_category, Total)) %>%
+  ggplot(aes(Major_category, Number, fill = Gender)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = "", y = "")
+```
+
+#25 most common majors and gender
+```{r}
+majors_processed %>%
+  arrange(desc(Total)) %>%
+  head(25) %>%
+  gather(Gender, Number, Men, Women) %>%
+  mutate(Major = fct_reorder(Major, Total)) %>%
+  ggplot(aes(Major, Number, fill = Gender)) +
+  geom_col() +
+  scale_y_continuous(labels = comma_format()) +
+  coord_flip() +
+  labs(x = "", y = "")
+```
+
+#Salary Grouped by Major Category
+Only taking majors over the 10th precentile of majors (15)
+```{r}
+majors_processed %>%
+  filter(Sample_size > 15) %>%
+  mutate(Major_category = fct_reorder(Major_category, Median)) %>%
+  ggplot(aes(Major_category, Median, fill = Major_category)) +
+  geom_boxplot() +
+  scale_y_continuous(labels = dollar_format()) +
+  coord_flip() +
+  expand_limits(y = 0) +
+  theme(legend.position = "none")
+```
+
+#What are the top earning majors
+Plotting Top 20 Median Earners of those 50th precentile of sample size (130)
+Plot shows median (point) with interquartile range (25th - 75th quartiles)
+```{r}
+majors_processed %>%
+  filter(Sample_size >= 130) %>%
+  head(20) %>%
+  ggplot(aes(Major, Median, color = Major_category)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = P25th, ymax = P75th)) +
+  scale_y_continuous(labels = dollar_format()) +
+  coord_flip() +
+  expand_limits(y = 0:80000)
+```
+
+#What are the lowest earning majors
+Plotting Bottom 20 Median Earners of those 50th precentile of sample size (130)
+Plot shows median (point) with interquartile range (25th - 75th quartiles)
+```{r}
+majors_processed %>%
+  filter(Sample_size >= 130) %>%
+  tail(20) %>%
+  ggplot(aes(Major, Median, color = Major_category)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = P25th, ymax = P75th)) +
+  scale_y_continuous(labels = dollar_format()) +
+  coord_flip() +
+  expand_limits(y = 0:80000)
+```
+
+#Look at earnings of the most common majors
+I took the 750 Sample_size as my cutoff because the graph was pretty unreadbale unless I did that
+I chose this number because the majors after this point seemed more familiar
+Dot is median, and bars are 25th - 75th precentiles
+```{r}
+majors_processed %>%
+  filter(Sample_size >= 750) %>%
+  ggplot(aes(Major, Median, color = Major_category)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = P25th, ymax = P75th)) +
+  scale_y_continuous(labels = dollar_format()) +
+  coord_flip() +
+  expand_limits(y = 0) +
+  labs(x = "")
+```
+
+#Job earnings based on share women in major
+Plot curve with a prediction line
+Also produce a summary to see if this is real or not
+
+#All majors
+```{r}
+g <- majors_processed %>%
+  filter(!is.na(Total)) %>%
+  mutate(Major_category = fct_lump(Major_category, 4),
+         Major_category = fct_relevel(Major_category, "Other", after = 0)) %>%
+  ggplot(aes(ShareWomen, Median, color = Major_category, size = Sample_size, label = Major)) +
+  geom_point() +
+  geom_smooth(aes(group = 1), method = lm) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = dollar_format()) +
+  expand_limits(y = 0)
+
+ggplotly(g)
+```
+
+#Plotly graphic of more common majors
+50th precentile of sample size as cutoff (130+)
+```{r}
+g <- majors_processed %>%
+  filter(!is.na(Total) & Sample_size >= 130) %>%
+  mutate(Major_category = fct_lump(Major_category, 4),
+         Major_category = fct_relevel(Major_category, "Other", after = 0)) %>%
+  ggplot(aes(ShareWomen, Median, color = Major_category, size = Sample_size, label = Major)) +
+  geom_point() +
+  geom_smooth(aes(group = 1), method = lm) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_y_continuous(labels = dollar_format()) +
+  expand_limits(y = 0)
+
+ggplotly(g)
+```
+
+#Linear regression
+Weighted on sample size, so nothing filtered out on sample size
+Weighted linear regression expects MEANs not MEDIANs, so this is borked from the start
+```{r}
+majors_processed %>%
+  lm(Median ~ ShareWomen, data = ., weights = Sample_size) %>%
+  summary()
+
+majors_processed %>%
+  filter(Sample_size >= 130 & !is.na(Total)) %>%
+  lm(Median ~ ShareWomen, data = ., weights = Sample_size) %>%
+  summary()
+```
+
+Seems like women tend to receive degrees in lower earning majors :thinking:
+Bottom line: If your major went from 100% men to 100% women, you could expect the median expected salary to go down by $23,650
+In other words: Every precentage point of men in a major is ~$237 increase in median expected salary
+
+#Job earnings but for major categories
+Looking at the categories and share women
+Consider using logarithmic vs polynomial vs linear
+Rememeber that this median wage is WEIGHTED by the sample size
+Linear regression is then further weighted by sample size
+```{r}
+categories_processed %>%
+  ggplot(aes(ShareWomen, Median_wtd)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  geom_text_repel(aes(label = Major_category), force = 8)
+
+categories_processed %>%
+  lm(Median_wtd ~ ShareWomen, data = ., weights = Samples) %>%
+  summary()
+```
+
+#Share women within each category
+Within each Major_category, what is the correlation between women and average salary
+
+I need to sit down and explain the following lines
+nest(-Major_category) %>%
+mutate(model = map(data, ~ lm(Median ~ ShareWomen, data = ., weights = Sample_size)),
+tidied = map(model, tidy))
+
+First, nest() takes a dataframe and takes out one variable (in this case Major_category) and then combines everything that is left into a dataframe called "data" and puts that into a single cell in a new tibble. See the print below. It's like split, except it takes out a variable and puts the remaining split dataframes into a list of tibbles next to it. Thank you Kanye, very cool!
+
+Next, we add a column using mutate() that takes that new dataframe, and then just runs the regression we used before on it. Read the function as "For every data we want to apply the weighted linear model of Median explained by ShareWomen on these data, with these weights" map(data, map(data, ~ lm(Median ~ ShareWomen, blah blah blah blah))))
+
+The KEY is that it is only running the linear regression WITHIN EACH MAJOR CATEGORY. This is going to be completely different than the previous modelling we've done because it uses this nesting trick to look at it one at a time.
+
+The new column will be called model, and have all of the component of the output of the lm() function.
+
+Then, we add another column, that runs the function broom::tidy() on each column model
+Read as, "A new column called `tidied` that, for each column model, runs tidy()"
+
+tidy turns model into a 2 row tibble of coefficients
+
+unnest(tidied) then takes the major_category, slaps it onto the front of the rows of the 2 row tibble of coefficients and only returns all of the combinations of those 2 tables. It should only be 22 rows long now.
+
+```{r}
+library(broom)
+
+#To better understand what nest() does
+majors_processed %>%
+  select(Major, Major_category, Total, ShareWomen, Sample_size, Median) %>%
+  add_count(Major_category) %>%
+  filter(n >= 9) %>%
+  nest(-Major_category)
+
+#to show the output of the call to unnest()
+majors_processed %>%
+  select(Major, Major_category, Total, ShareWomen, Sample_size, Median) %>%
+  add_count(Major_category) %>%
+  filter(n >= 9) %>%
+  nest(-Major_category) %>%
+  mutate(model = map(data, ~ lm(Median ~ ShareWomen, data = ., weights = Sample_size)),
+         tidied = map(model, tidy)) %>%
+  unnest(tidied)
+
+majors_processed %>%
+  select(Major, Major_category, Total, ShareWomen, Sample_size, Median) %>%
+  add_count(Major_category) %>%
+  filter(n >= 9) %>%
+  nest(-Major_category) %>%
+  mutate(model = map(data, ~ lm(Median ~ ShareWomen, data = ., weights = Sample_size)),
+         tidied = map(model, tidy)) %>%
+  unnest(tidied) %>%
+  filter(term == "ShareWomen") %>%
+  arrange(estimate) %>%
+  mutate(fdr = p.adjust(p.value, method = "fdr"))
+```
+
+Reading the output of the nest() & unnest() function
+Intercept estimate mostly gives you an idea of the earnings within a major_category
+The ShareWomen estimate tells you, if you went from a 100% men major within a major_category to a 100% women major within a category, you would expect a change of that much money in median wages
+
+fdr is false discovery rate for mutiple testing. Consider this, when you do a big ole analysis that gives you a ton of p.values, even if you have p = 0.04, you have to consider that 1 in 25 of those values you find will not be real, but an artifact of what you are calling significant. The FDR tries to help determine the precent chance that a given value could be false
+
+```{r}
+knitr::knit_exit()
+```
+
+Everything after here won't get knit together! Thank you Kanye, very cool!
+
+#Most common major categories
+Have to at wt = Total to have it sum up the number of people in each!
+Otherwise it will just count the number of majors considered Engineering, ect.
+```{r}
+majors_processed %>%
+  count(Major_category, wt = Total, sort = TRUE) %>%
+  mutate(Major_category = fct_reorder(Major_category, n)) %>%
+  ggplot(aes(Major_category, n)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = "", y = "")
+```
+
+25 Most common majors
+```{r}
+majors_processed %>%
+  mutate(Major = fct_reorder(Major, Total)) %>%
+  arrange(desc(Total)) %>%
+  head(25) %>%
+  ggplot(aes(Major, Total)) +
+  geom_col() +
+  scale_y_continuous(labels = comma_format()) +
+  coord_flip() +
+  labs(x = "", y = "")
+```
+
+Barplot of median of medians. This data is already in the box plot, which just has more information
+```{r}
+majors_processed %>%
+  group_by(Major_category) %>%
+  summarize(Median = median(Median)) %>%
+  mutate(Major_category = fct_reorder(Major_category, Median)) %>%
+  ggplot(aes(Major_category, Median, fill = Major_category)) +
+  geom_col() +
+  scale_y_continuous(labels = dollar_format()) +
+  coord_flip() +
+  theme(legend.position = "none")
+```
+
+Example of bad use of geom_text
+Bland-Altman Plot of majors
+```{r}
+majors_processed %>%
+  ggplot(aes(Sample_size, Median)) +
+  geom_point() +
+  geom_text(aes(label = Major)) +
+  scale_x_log10()
+```
+
+Show above graph with all labels with ggrepel (still a bad idea)
+```{r}
+majors_processed %>%
+  ggplot(aes(Sample_size, Median)) +
+  geom_point() +
+  geom_text_repel(aes(label = Major), force = 0.1) +
+  scale_x_log10()
+```
+
+Only show some labels
+Check out check_overlap = TRUE to prevent unreadable graph
+```{r}
+majors_processed %>%
+  ggplot(aes(Sample_size, Median)) +
+  geom_point() +
+  geom_text(aes(label = Major), check_overlap = TRUE, vjust = 1) +
+  scale_x_log10() +
+  expand_limits(y = 0)
+```
+
+Unweighted linear regression
+```{r}
+majors_processed %>%
+  filter(!is.na(Total)) %>%
+  lm(Median ~ ShareWomen, data = .) %>%
+  summary()
+```
+
+50th precentile and more common majors
+Job earnings based on share women
+Consider polynomial vs linear
+
+Consider both linear and polynomial models
+
+For Linear
+  geom_smooth(method = lm)
+  &
+  lm(Median ~ ShareWomen, data = .) %>%
+
+For polynomial
+  geom_smooth(method = lm, formula = y ~ poly(x, 2, raw = TRUE))
+  &
+  lm(Median ~ poly(ShareWomen, 2, raw = TRUE), data = .) %>%
+```{r}
+majors_processed %>%
+  filter(Sample_size >= 130 & !is.na(Total)) %>%
+  ggplot(aes(ShareWomen, Median)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  expand_limits(y = 0)
+```
